@@ -1,7 +1,39 @@
 @echo off
-echo Building ResSwitcher as a single WinExe...
-dotnet publish -c Release
+setlocal
+
+cd /d "%~dp0"
+
+where dotnet >nul 2>nul
+if errorlevel 1 (
+    echo Error: .NET SDK was not found.
+    echo Install the .NET 8 SDK, then run this file again.
+    pause
+    exit /b 1
+)
+
+echo Building ResSwitcher9000 v0.1.0...
+
+dotnet publish "ResSwitcher9000.csproj" ^
+    -c Release ^
+    -r win-x64 ^
+    --self-contained true ^
+    -p:PublishSingleFile=true ^
+    -p:IncludeNativeLibrariesForSelfExtract=true ^
+    -p:DebugType=None ^
+    -p:DebugSymbols=false ^
+    -o "publish\win-x64"
+
+if errorlevel 1 (
+    echo.
+    echo Build failed.
+    pause
+    exit /b 1
+)
+
 echo.
-echo Done! You can find the executable in:
-echo bin\Release\net8.0-windows\win-x64\publish\ResSwitcher.exe
+echo Build complete:
+echo %CD%\publish\win-x64\ResSwitcher9000.exe
+echo.
 pause
+
+endlocal
