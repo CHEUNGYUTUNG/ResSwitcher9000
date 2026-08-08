@@ -85,3 +85,12 @@ Show help:
 ```powershell
 .\ResSwitcher9000.exe --help
 ```
+## Shortcut Confirmation
+
+Shortcuts created by the wizard use safe confirmation mode.
+
+After opening a shortcut:
+
+- Press `1` within 15 seconds to keep the selected mode.
+- Press `0` to revert immediately.
+- If no confirmation is given, ResSwitcher9000 restores the previous mode automatically.
