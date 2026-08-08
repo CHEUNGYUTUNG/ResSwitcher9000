@@ -5,7 +5,7 @@
 
     <AssemblyName>ResSwitcher9000</AssemblyName>
     <RootNamespace>ResSwitcher9000</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
 
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

@@ -3,6 +3,8 @@ setlocal
 
 cd /d "%~dp0"
 
+taskkill /f /im ResSwitcher9000.exe >nul 2>nul
+
 where dotnet >nul 2>nul
 if errorlevel 1 (
     echo Error: .NET SDK was not found.
@@ -11,7 +13,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Building ResSwitcher9000 v0.1.0...
+echo Building ResSwitcher9000 v0.2.1...
 
 dotnet publish "ResSwitcher9000.csproj" ^
     -c Release ^

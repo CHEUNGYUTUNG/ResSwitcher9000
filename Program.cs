@@ -118,63 +118,94 @@ internal static class Program
             {
                 case "-d":
                 case "--device":
+                {
                     if (hasDevice ||
-                        !TryValue(args, ref i, out options.DeviceName, out error))
+                        !TryValue(args, ref i, out string device, out error))
                     {
-                        error = hasDevice
-                            ? "Display device was specified more than once."
-                            : error;
+                        if (hasDevice)
+                        {
+                            error = "Display device was specified more than once.";
+                        }
 
                         return false;
                     }
 
+                    options.DeviceName = device;
                     hasDevice = true;
                     break;
+                }
 
                 case "-w":
                 case "--width":
+                {
                     if (hasWidth ||
-                        !TryNumber(args, ref i, "Width", out options.Width, out error))
+                        !TryNumber(
+                            args,
+                            ref i,
+                            "Width",
+                            out int width,
+                            out error))
                     {
-                        error = hasWidth
-                            ? "Width was specified more than once."
-                            : error;
+                        if (hasWidth)
+                        {
+                            error = "Width was specified more than once.";
+                        }
 
                         return false;
                     }
 
+                    options.Width = width;
                     hasWidth = true;
                     break;
+                }
 
                 case "-h":
                 case "--height":
+                {
                     if (hasHeight ||
-                        !TryNumber(args, ref i, "Height", out options.Height, out error))
+                        !TryNumber(
+                            args,
+                            ref i,
+                            "Height",
+                            out int height,
+                            out error))
                     {
-                        error = hasHeight
-                            ? "Height was specified more than once."
-                            : error;
+                        if (hasHeight)
+                        {
+                            error = "Height was specified more than once.";
+                        }
 
                         return false;
                     }
 
+                    options.Height = height;
                     hasHeight = true;
                     break;
+                }
 
                 case "-r":
                 case "--refresh":
+                {
                     if (hasRefresh ||
-                        !TryNumber(args, ref i, "Refresh rate", out options.RefreshRate, out error))
+                        !TryNumber(
+                            args,
+                            ref i,
+                            "Refresh rate",
+                            out int refresh,
+                            out error))
                     {
-                        error = hasRefresh
-                            ? "Refresh rate was specified more than once."
-                            : error;
+                        if (hasRefresh)
+                        {
+                            error = "Refresh rate was specified more than once.";
+                        }
 
                         return false;
                     }
 
+                    options.RefreshRate = refresh;
                     hasRefresh = true;
                     break;
+                }
 
                 case "--persist":
                     options.Persist = true;
