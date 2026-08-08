@@ -44,7 +44,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
-        // No arguments = interactive shortcut wizard.
+        // No arguments opens the shortcut wizard.
         if (args.Length == 0)
         {
             return RunWithConsole(RunWizard);
@@ -67,7 +67,6 @@ internal static class Program
 
         if (!TryParseOptions(args, out Options options, out string parseError))
         {
-            // Keep shortcuts silent unless the user explicitly asks for output.
             if (ContainsVerboseFlag(args))
             {
                 return RunWithConsole(() =>
@@ -103,6 +102,7 @@ internal static class Program
             });
         }
 
+        // Shortcut mode: intentionally silent.
         return ApplyMode(options, out _);
     }
 
@@ -334,9 +334,7 @@ internal static class Program
         mode = default;
         message = string.Empty;
 
-        DisplayInfo? display = FindActiveDisplay(options.DeviceName);
-
-        if (display is null)
+        if (FindActiveDisplay(options.DeviceName) is null)
         {
             message =
                 $"'{options.DeviceName}' is not an active display device. " +
@@ -353,7 +351,7 @@ internal static class Program
             return ExitDisplayError;
         }
 
-        // Start from the driver-provided current mode, then change only
+        // Preserve the current driver-provided mode, changing only
         // resolution and refresh rate.
         mode.DmPelsWidth = (uint)options.Width;
         mode.DmPelsHeight = (uint)options.Height;
@@ -387,7 +385,7 @@ internal static class Program
         Console.WriteLine("================");
         Console.WriteLine();
         Console.WriteLine("This wizard creates a desktop shortcut.");
-        Console.WriteLine("The shortcut will apply a mode silently when opened.");
+        Console.WriteLine("The shortcut changes the selected display silently.");
         Console.WriteLine();
 
         List<DisplayInfo> displays = GetActiveDisplays();
@@ -466,6 +464,7 @@ internal static class Program
         Console.Write("Shortcut name [Resolution Shortcut]: ");
 
         string shortcutName = CleanShortcutName(Console.ReadLine());
+
         string desktopPath = Environment.GetFolderPath(
             Environment.SpecialFolder.DesktopDirectory);
 
@@ -490,9 +489,7 @@ internal static class Program
             WriteSuccess($"Created shortcut: {shortcutPath}");
             Console.WriteLine();
             Console.WriteLine(
-                "The generated shortcut applies the mode without requesting registry persistence.");
-            Console.WriteLine(
-                "Use --persist manually only if you specifically want Windows profile persistence.");
+                "The shortcut applies this mode without requesting permanent profile storage.");
 
             Pause();
             return ExitSuccess;
@@ -580,10 +577,8 @@ internal static class Program
                 break;
             }
 
-            bool attached =
-                (displayDevice.StateFlags & DisplayDeviceAttachedToDesktop) != 0;
-
-            if (!attached || string.IsNullOrWhiteSpace(displayDevice.DeviceName))
+            if ((displayDevice.StateFlags & DisplayDeviceAttachedToDesktop) == 0 ||
+                string.IsNullOrWhiteSpace(displayDevice.DeviceName))
             {
                 continue;
             }
@@ -633,7 +628,7 @@ internal static class Program
             EnumCurrentSettings,
             ref mode);
 
-        // This app does not pass driver-private trailing data.
+        // This tool does not use any driver-private trailing data.
         mode.DmSize = checked((ushort)Marshal.SizeOf<DEVMODEW>());
         mode.DmDriverExtra = 0;
 
@@ -665,7 +660,7 @@ internal static class Program
     {
         string executablePath = Environment.ProcessPath
             ?? throw new InvalidOperationException(
-                "Could not determine the ResSwitcher9000 executable path.");
+                "Could not determine the executable path.");
 
         Type? shellType = Type.GetTypeFromProgID("WScript.Shell");
 
@@ -694,6 +689,7 @@ internal static class Program
         shortcut.Description =
             $"Apply {options.Width}x{options.Height} @ {options.RefreshRate} Hz";
 
+        shortcut.WindowStyle = 7;
         shortcut.Save();
     }
 
@@ -726,12 +722,9 @@ internal static class Program
 
         name = cleaned.ToString().Trim().TrimEnd('.', ' ');
 
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return fallbackName;
-        }
-
-        return name.Length > 80 ? name[..80] : name;
+        return string.IsNullOrWhiteSpace(name)
+            ? fallbackName
+            : name;
     }
 
     private static bool IsYes(string? input)
@@ -768,7 +761,7 @@ internal static class Program
         {
             int error = Marshal.GetLastWin32Error();
 
-            // ERROR_ACCESS_DENIED means this process already has a console.
+            // ERROR_ACCESS_DENIED means the process already has a console.
             if (error != ErrorAccessDenied)
             {
                 if (!AllocConsole())
@@ -839,7 +832,7 @@ internal static class Program
         Console.WriteLine(
             @"  ResSwitcher9000.exe --device ""\\.\DISPLAY1"" --width 2560 --height 1440 --refresh 144");
         Console.WriteLine();
-        Console.WriteLine("Apply and ask Windows to save it in the current user profile:");
+        Console.WriteLine("Save the selected mode in the current Windows user profile:");
         Console.WriteLine(
             @"  ResSwitcher9000.exe --device ""\\.\DISPLAY1"" --width 2560 --height 1440 --refresh 144 --persist");
         Console.WriteLine();
@@ -852,7 +845,7 @@ internal static class Program
         Console.WriteLine("  -w, --width      Width in physical pixels");
         Console.WriteLine("  -h, --height     Height in physical pixels");
         Console.WriteLine("  -r, --refresh    Refresh rate in whole Hz");
-        Console.WriteLine("  --persist        Save mode to the current Windows user profile");
+        Console.WriteLine("  --persist        Save the selected mode in the Windows user profile");
         Console.WriteLine("  --verbose        Show success or error output");
         Console.WriteLine("  --list           List active display devices");
         Console.WriteLine("  --help, -?       Show this help");
