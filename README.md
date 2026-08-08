@@ -1,29 +1,29 @@
 # ResSwitcher9000
 
-A small Windows utility for creating shortcuts that switch one display to a chosen resolution and refresh rate.
+ResSwitcher9000 is a free, open-source Windows utility that creates desktop shortcuts for changing a selected monitor's resolution and refresh rate.
+
+It supports Windows 10 and Windows 11 on x64 PCs. It lists Windows-reported display modes, tests a selected mode before creating a shortcut, and does not choose a default resolution or refresh rate.
 
 ## Platform
 
 - Windows 10 and Windows 11, x64.
 - The release build is `win-x64`.
 - No installer, background service, or configuration file.
-- The release executable is self-contained: users do not need to install .NET.
+- The release executable is self-contained.
 
 ## What It Does
 
 ResSwitcher9000:
 
 1. Finds active Windows display devices.
-2. Lets you select one display.
-3. Lets you enter a resolution and refresh rate.
-4. Tests the requested mode before applying it.
+2. Lets you select a display.
+3. Shows resolutions and refresh rates reported by Windows.
+4. Tests the selected mode before creating a shortcut.
 5. Creates a desktop shortcut for that mode.
 
 It does not choose a default resolution or refresh rate.
 
-A mode is only applied if Windows and the current GPU driver accept it.
-
-## Use the Wizard
+## Wizard
 
 Double-click:
 
@@ -31,95 +31,57 @@ Double-click:
 ResSwitcher9000.exe
 ```
 
-Then:
+The wizard will:
 
-1. Select a display.
-2. Enter width, height, and refresh rate.
+1. List active displays.
+2. Let you select a display.
+3. List Windows-reported resolutions.
+4. List refresh rates for the selected resolution.
+5. Create a desktop shortcut.
+6. Let you create another shortcut or exit.
+
+Choose `0` in the resolution list to manually enter width, height, and refresh rate.
+
+Choose `0` in the refresh-rate list to manually enter a refresh rate for the selected resolution.
 
 Example only:
 
 ```text
-2560 1440 144
+1920 1080 60
 ```
 
-3. Enter a shortcut name.
-4. Open the generated desktop shortcut whenever you want to apply that mode.
-
-The wizard-generated shortcut does not request persistent Windows profile changes.
+Shortcuts created by the wizard apply the mode without requesting permanent profile persistence.
 
 ## Command Line
 
-List active display devices:
+PowerShell requires `.\` before an executable in the current folder.
 
-```bat
-ResSwitcher9000.exe --list
+List active displays:
+
+```powershell
+.\ResSwitcher9000.exe --list
 ```
 
-Apply a mode:
+Apply a display mode:
 
-```bat
-ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 2560 --height 1440 --refresh 144
+```powershell
+.\ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 1920 --height 1080 --refresh 60
 ```
 
 Apply a mode and ask Windows to save it in the current user display profile:
 
-```bat
-ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 2560 --height 1440 --refresh 144 --persist
+```powershell
+.\ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 1920 --height 1080 --refresh 60 --persist
 ```
 
 Show success or error output:
 
-```bat
-ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 2560 --height 1440 --refresh 144 --verbose
+```powershell
+.\ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 1920 --height 1080 --refresh 60 --verbose
 ```
 
 Show help:
 
-```bat
-ResSwitcher9000.exe --help
+```powershell
+.\ResSwitcher9000.exe --help
 ```
-
-## Arguments
-
-| Argument | Description |
-|---|---|
-| `-d`, `--device` | Display device name from `--list` |
-| `-w`, `--width` | Width in physical pixels |
-| `-h`, `--height` | Height in physical pixels |
-| `-r`, `--refresh` | Refresh rate in whole Hz |
-| `--persist` | Ask Windows to save the mode in the current user profile |
-| `--verbose` | Show output for troubleshooting |
-| `--list` | List active display devices |
-| `--help`, `-?` | Show command help |
-
-## Build From Source
-
-Install the .NET 8 SDK, then run:
-
-```bat
-build.bat
-```
-
-The release executable will be created here:
-
-```text
-publish\win-x64\ResSwitcher9000.exe
-```
-
-## Notes
-
-- Display device names can change after reconnecting monitors, changing docks, or reinstalling GPU drivers.
-- Run `ResSwitcher9000.exe --list` again if an old shortcut stops working.
-- Resolution values are physical pixels, not Windows scaling percentages.
-- The tool changes resolution and refresh rate only.
-- It does not configure HDR, Windows scaling, monitor inputs, color profiles, or GPU-control-panel settings.
-
-## Uninstall
-
-Delete:
-
-```text
-ResSwitcher9000.exe
-```
-
-and any shortcuts created by the wizard.

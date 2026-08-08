@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -28,7 +29,6 @@ internal static class Program
     private const int DispChangeNotUpdated = -3;
     private const int DispChangeBadFlags = -4;
     private const int DispChangeBadParam = -5;
-    private const int DispChangeBadDualView = -6;
 
     private const uint AttachParentProcess = 0xFFFFFFFF;
     private const int ErrorAccessDenied = 5;
@@ -44,7 +44,6 @@ internal static class Program
 
     private static int Main(string[] args)
     {
-        // No arguments opens the shortcut wizard.
         if (args.Length == 0)
         {
             return RunWithConsole(RunWizard);
@@ -67,7 +66,7 @@ internal static class Program
 
         if (!TryParseOptions(args, out Options options, out string parseError))
         {
-            if (ContainsVerboseFlag(args))
+            if (args.Contains("--verbose"))
             {
                 return RunWithConsole(() =>
                 {
@@ -102,7 +101,7 @@ internal static class Program
             });
         }
 
-        // Shortcut mode: intentionally silent.
+        // Shortcut mode is intentionally silent.
         return ApplyMode(options, out _);
     }
 
@@ -151,7 +150,7 @@ internal static class Program
                     }
 
                     if (!TryReadValue(args, ref i, argument, out string widthText, out error) ||
-                        !TryParsePositiveInteger(widthText, "Width", out int width, out error))
+                        !TryParsePositiveInt(widthText, "Width", out int width, out error))
                     {
                         return false;
                     }
@@ -169,7 +168,7 @@ internal static class Program
                     }
 
                     if (!TryReadValue(args, ref i, argument, out string heightText, out error) ||
-                        !TryParsePositiveInteger(heightText, "Height", out int height, out error))
+                        !TryParsePositiveInt(heightText, "Height", out int height, out error))
                     {
                         return false;
                     }
@@ -187,7 +186,7 @@ internal static class Program
                     }
 
                     if (!TryReadValue(args, ref i, argument, out string refreshText, out error) ||
-                        !TryParsePositiveInteger(refreshText, "Refresh rate", out int refresh, out error))
+                        !TryParsePositiveInt(refreshText, "Refresh rate", out int refresh, out error))
                     {
                         return false;
                     }
@@ -213,8 +212,7 @@ internal static class Program
         if (!hasDevice || !hasWidth || !hasHeight || !hasRefresh)
         {
             error =
-                "Command-line mode requires --device, --width, --height, and --refresh. " +
-                "Run ResSwitcher9000.exe --help for examples.";
+                "Command-line mode requires --device, --width, --height, and --refresh.";
 
             return false;
         }
@@ -249,7 +247,7 @@ internal static class Program
         return true;
     }
 
-    private static bool TryParsePositiveInteger(
+    private static bool TryParsePositiveInt(
         string value,
         string name,
         out int number,
@@ -271,19 +269,6 @@ internal static class Program
         return true;
     }
 
-    private static bool ContainsVerboseFlag(string[] args)
-    {
-        foreach (string argument in args)
-        {
-            if (argument == "--verbose")
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private static int ApplyMode(Options options, out string message)
     {
         int testResult = TestMode(options, out DEVMODEW mode, out message);
@@ -295,14 +280,14 @@ internal static class Program
 
         uint flags = options.Persist ? CdsUpdateRegistry : 0;
 
-        int applyResult = ChangeDisplaySettingsExW(
+        int result = ChangeDisplaySettingsExW(
             options.DeviceName,
             ref mode,
             IntPtr.Zero,
             flags,
             IntPtr.Zero);
 
-        if (applyResult == DispChangeSuccessful)
+        if (result == DispChangeSuccessful)
         {
             message = options.Persist
                 ? "Display mode applied and saved to the current Windows user profile."
@@ -311,7 +296,7 @@ internal static class Program
             return ExitSuccess;
         }
 
-        if (applyResult == DispChangeRestart)
+        if (result == DispChangeRestart)
         {
             message =
                 "Windows saved the display mode, but reports that a restart is required.";
@@ -319,10 +304,7 @@ internal static class Program
             return ExitRestartRequired;
         }
 
-        message =
-            $"Windows could not apply the requested mode: " +
-            DescribeDisplayChangeResult(applyResult);
-
+        message = $"Windows could not apply the mode: {DescribeResult(result)}";
         return ExitApplyError;
     }
 
@@ -338,7 +320,7 @@ internal static class Program
         {
             message =
                 $"'{options.DeviceName}' is not an active display device. " +
-                "Run ResSwitcher9000.exe --list to find valid device names.";
+                "Run ResSwitcher9000.exe --list to see valid device names.";
 
             return ExitDisplayError;
         }
@@ -351,26 +333,24 @@ internal static class Program
             return ExitDisplayError;
         }
 
-        // Preserve the current driver-provided mode, changing only
-        // resolution and refresh rate.
+        // Preserve the current driver-provided mode.
         mode.DmPelsWidth = (uint)options.Width;
         mode.DmPelsHeight = (uint)options.Height;
         mode.DmDisplayFrequency = (uint)options.RefreshRate;
         mode.DmFields = DmPelsWidth | DmPelsHeight | DmDisplayFrequency;
 
-        int testResult = ChangeDisplaySettingsExW(
+        int result = ChangeDisplaySettingsExW(
             options.DeviceName,
             ref mode,
             IntPtr.Zero,
             CdsTest,
             IntPtr.Zero);
 
-        if (testResult != DispChangeSuccessful)
+        if (result != DispChangeSuccessful)
         {
             message =
                 $"Windows rejected {options.Width}x{options.Height} @ " +
-                $"{options.RefreshRate} Hz for '{options.DeviceName}': " +
-                DescribeDisplayChangeResult(testResult);
+                $"{options.RefreshRate} Hz: {DescribeResult(result)}";
 
             return ExitUnsupportedMode;
         }
@@ -381,163 +361,293 @@ internal static class Program
 
     private static int RunWizard()
     {
-        Console.WriteLine("ResSwitcher9000");
-        Console.WriteLine("================");
-        Console.WriteLine();
-        Console.WriteLine("This wizard creates a desktop shortcut.");
-        Console.WriteLine("The shortcut changes the selected display silently.");
-        Console.WriteLine();
-
-        List<DisplayInfo> displays = GetActiveDisplays();
-
-        if (displays.Count == 0)
+        while (true)
         {
-            WriteError("No active display devices were found.");
-            Pause();
-            return ExitDisplayError;
-        }
+            Console.Clear();
 
-        Console.WriteLine("Active display devices:");
-        Console.WriteLine();
+            Console.WriteLine("ResSwitcher9000");
+            Console.WriteLine("================");
+            Console.WriteLine();
+            Console.WriteLine("Create a shortcut for a display resolution and refresh rate.");
+            Console.WriteLine();
 
-        for (int i = 0; i < displays.Count; i++)
-        {
-            PrintDisplay(displays[i], i + 1);
-        }
+            List<DisplayInfo> displays = GetActiveDisplays();
 
-        Console.Write($"Select a display (1-{displays.Count}): ");
-
-        if (!int.TryParse(
-                Console.ReadLine(),
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out int selectedDisplayNumber) ||
-            selectedDisplayNumber < 1 ||
-            selectedDisplayNumber > displays.Count)
-        {
-            WriteError("Invalid display selection.");
-            Pause();
-            return ExitInvalidArguments;
-        }
-
-        DisplayInfo selectedDisplay = displays[selectedDisplayNumber - 1];
-
-        Console.WriteLine();
-        Console.Write("Enter width, height, and refresh rate (example: 2560 1440 144): ");
-
-        if (!TryParseModeInput(
-                Console.ReadLine(),
-                out int width,
-                out int height,
-                out int refreshRate,
-                out string modeError))
-        {
-            WriteError(modeError);
-            Pause();
-            return ExitInvalidArguments;
-        }
-
-        Options options = new Options
-        {
-            DeviceName = selectedDisplay.DeviceName,
-            Width = width,
-            Height = height,
-            RefreshRate = refreshRate,
-            Persist = false
-        };
-
-        Console.WriteLine();
-        Console.WriteLine("Testing the requested mode...");
-
-        int testResult = TestMode(options, out _, out string testMessage);
-
-        if (testResult != ExitSuccess)
-        {
-            WriteError(testMessage);
-            Pause();
-            return testResult;
-        }
-
-        WriteSuccess("Mode supported.");
-
-        Console.WriteLine();
-        Console.Write("Shortcut name [Resolution Shortcut]: ");
-
-        string shortcutName = CleanShortcutName(Console.ReadLine());
-
-        string desktopPath = Environment.GetFolderPath(
-            Environment.SpecialFolder.DesktopDirectory);
-
-        string shortcutPath = Path.Combine(desktopPath, shortcutName + ".lnk");
-
-        if (File.Exists(shortcutPath))
-        {
-            Console.Write($"'{shortcutName}.lnk' already exists. Overwrite? [y/N]: ");
-
-            if (!IsYes(Console.ReadLine()))
+            if (displays.Count == 0)
             {
-                Console.WriteLine("No shortcut was created.");
+                WriteError("No active display devices were found.");
                 Pause();
+                return ExitDisplayError;
+            }
+
+            Console.WriteLine("Active display devices:");
+            Console.WriteLine();
+
+            for (int i = 0; i < displays.Count; i++)
+            {
+                PrintDisplay(displays[i], i + 1);
+            }
+
+            Console.Write($"Select a display (1-{displays.Count}): ");
+
+            if (!TryReadChoice(1, displays.Count, out int displayChoice))
+            {
+                WriteError("Invalid display selection.");
+                Pause();
+                return ExitInvalidArguments;
+            }
+
+            DisplayInfo display = displays[displayChoice - 1];
+
+            if (!TryChooseMode(display.DeviceName, out DisplayMode selectedMode))
+            {
+                WriteError("Invalid mode selection.");
+                Pause();
+                return ExitInvalidArguments;
+            }
+
+            Options options = new Options
+            {
+                DeviceName = display.DeviceName,
+                Width = selectedMode.Width,
+                Height = selectedMode.Height,
+                RefreshRate = selectedMode.RefreshRate,
+                Persist = false
+            };
+
+            Console.WriteLine();
+            Console.WriteLine("Testing the requested mode...");
+
+            int testResult = TestMode(options, out _, out string testMessage);
+
+            if (testResult != ExitSuccess)
+            {
+                WriteError(testMessage);
+                Pause();
+                return testResult;
+            }
+
+            WriteSuccess("Mode supported.");
+
+            Console.WriteLine();
+            Console.Write("Shortcut name [Resolution Shortcut]: ");
+
+            string shortcutName = CleanShortcutName(Console.ReadLine());
+
+            string desktop = Environment.GetFolderPath(
+                Environment.SpecialFolder.DesktopDirectory);
+
+            string shortcutPath = Path.Combine(desktop, shortcutName + ".lnk");
+
+            if (File.Exists(shortcutPath))
+            {
+                Console.Write($"'{shortcutName}.lnk' already exists. Overwrite? [y/N]: ");
+
+                if (!IsYes(Console.ReadLine()))
+                {
+                    Console.WriteLine("No shortcut was created.");
+                    Pause();
+                    return ExitSuccess;
+                }
+            }
+
+            try
+            {
+                CreateShortcut(shortcutPath, options);
+                WriteSuccess($"Created shortcut: {shortcutPath}");
+            }
+            catch (Exception ex)
+            {
+                WriteError($"Could not create shortcut: {ex.Message}");
+                Pause();
+                return ExitShortcutError;
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("[1] Create another shortcut");
+            Console.WriteLine("[0] Exit or close this window");
+            Console.Write("Choose: ");
+
+            if (Console.ReadLine()?.Trim() != "1")
+            {
                 return ExitSuccess;
             }
         }
-
-        try
-        {
-            CreateShortcut(shortcutPath, options);
-
-            WriteSuccess($"Created shortcut: {shortcutPath}");
-            Console.WriteLine();
-            Console.WriteLine(
-                "The shortcut applies this mode without requesting permanent profile storage.");
-
-            Pause();
-            return ExitSuccess;
-        }
-        catch (Exception ex)
-        {
-            WriteError($"Could not create shortcut: {ex.Message}");
-            Pause();
-            return ExitShortcutError;
-        }
     }
 
-    private static bool TryParseModeInput(
-        string? input,
-        out int width,
-        out int height,
-        out int refreshRate,
-        out string error)
+    private static bool TryChooseMode(
+        string deviceName,
+        out DisplayMode selectedMode)
     {
-        width = 0;
-        height = 0;
-        refreshRate = 0;
-        error = string.Empty;
+        selectedMode = default;
+
+        List<DisplayMode> modes = GetModes(deviceName);
+
+        if (modes.Count == 0)
+        {
+            Console.WriteLine("Windows did not report any modes for this display.");
+            return TryReadManualMode(out selectedMode);
+        }
+
+        DisplayMode? current = null;
+
+        if (TryGetCurrentMode(deviceName, out DEVMODEW currentDevMode))
+        {
+            current = new DisplayMode(
+                (int)currentDevMode.DmPelsWidth,
+                (int)currentDevMode.DmPelsHeight,
+                (int)currentDevMode.DmDisplayFrequency);
+        }
+
+        List<(int Width, int Height)> resolutions = modes
+            .Select(mode => (mode.Width, mode.Height))
+            .Distinct()
+            .OrderByDescending(mode => (long)mode.Width * mode.Height)
+            .ThenByDescending(mode => mode.Width)
+            .ThenByDescending(mode => mode.Height)
+            .ToList();
+
+        Console.WriteLine();
+        Console.WriteLine($"Windows-reported resolutions for {deviceName}:");
+        Console.WriteLine();
+
+        for (int i = 0; i < resolutions.Count; i++)
+        {
+            (int width, int height) = resolutions[i];
+
+            bool isCurrent =
+                current.HasValue &&
+                current.Value.Width == width &&
+                current.Value.Height == height;
+
+            Console.WriteLine(
+                $"[{i + 1}] {width}x{height}" +
+                (isCurrent ? " (current)" : string.Empty));
+        }
+
+        Console.WriteLine("[0] Enter width, height, and refresh rate manually");
+        Console.WriteLine();
+        Console.Write($"Choose a resolution (0-{resolutions.Count}): ");
+
+        if (!TryReadChoice(0, resolutions.Count, out int resolutionChoice))
+        {
+            return false;
+        }
+
+        if (resolutionChoice == 0)
+        {
+            return TryReadManualMode(out selectedMode);
+        }
+
+        (int selectedWidth, int selectedHeight) = resolutions[resolutionChoice - 1];
+
+        List<int> refreshRates = modes
+            .Where(mode =>
+                mode.Width == selectedWidth &&
+                mode.Height == selectedHeight)
+            .Select(mode => mode.RefreshRate)
+            .Distinct()
+            .OrderBy(rate => rate)
+            .ToList();
+
+        Console.WriteLine();
+        Console.WriteLine($"Windows-reported refresh rates for {selectedWidth}x{selectedHeight}:");
+        Console.WriteLine();
+
+        for (int i = 0; i < refreshRates.Count; i++)
+        {
+            int refreshRate = refreshRates[i];
+
+            bool isCurrent =
+                current.HasValue &&
+                current.Value.Width == selectedWidth &&
+                current.Value.Height == selectedHeight &&
+                current.Value.RefreshRate == refreshRate;
+
+            Console.WriteLine(
+                $"[{i + 1}] {refreshRate} Hz" +
+                (isCurrent ? " (current)" : string.Empty));
+        }
+
+        Console.WriteLine("[0] Enter a refresh rate manually");
+        Console.WriteLine();
+        Console.Write($"Choose a refresh rate (0-{refreshRates.Count}): ");
+
+        if (!TryReadChoice(0, refreshRates.Count, out int refreshChoice))
+        {
+            return false;
+        }
+
+        if (refreshChoice == 0)
+        {
+            Console.Write("Enter refresh rate in Hz (example: 60): ");
+
+            if (!TryParsePositiveInt(
+                    Console.ReadLine() ?? string.Empty,
+                    "Refresh rate",
+                    out int manualRefresh,
+                    out _))
+            {
+                return false;
+            }
+
+            selectedMode = new DisplayMode(
+                selectedWidth,
+                selectedHeight,
+                manualRefresh);
+
+            return true;
+        }
+
+        selectedMode = new DisplayMode(
+            selectedWidth,
+            selectedHeight,
+            refreshRates[refreshChoice - 1]);
+
+        return true;
+    }
+
+    private static bool TryReadManualMode(out DisplayMode mode)
+    {
+        mode = default;
+
+        Console.WriteLine();
+        Console.Write("Enter width, height, and refresh rate (example: 1920 1080 60): ");
+
+        string? input = Console.ReadLine();
 
         if (string.IsNullOrWhiteSpace(input))
         {
-            error = "Enter width, height, and refresh rate.";
             return false;
         }
 
-        string[] parts = input.Split(
-            ' ',
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        string[] values = input.Split(
+            new[] { ' ', '\t' },
+            StringSplitOptions.RemoveEmptyEntries);
 
-        if (parts.Length != 3)
-        {
-            error = "Enter exactly three values, such as: 2560 1440 144";
-            return false;
-        }
-
-        if (!TryParsePositiveInteger(parts[0], "Width", out width, out error) ||
-            !TryParsePositiveInteger(parts[1], "Height", out height, out error) ||
-            !TryParsePositiveInteger(parts[2], "Refresh rate", out refreshRate, out error))
+        if (values.Length != 3 ||
+            !TryParsePositiveInt(values[0], "Width", out int width, out _) ||
+            !TryParsePositiveInt(values[1], "Height", out int height, out _) ||
+            !TryParsePositiveInt(values[2], "Refresh rate", out int refresh, out _))
         {
             return false;
         }
 
+        mode = new DisplayMode(width, height, refresh);
         return true;
+    }
+
+    private static bool TryReadChoice(int minimum, int maximum, out int choice)
+    {
+        choice = 0;
+
+        return int.TryParse(
+                   Console.ReadLine(),
+                   NumberStyles.None,
+                   CultureInfo.InvariantCulture,
+                   out choice) &&
+               choice >= minimum &&
+               choice <= maximum;
     }
 
     private static int ListDisplays()
@@ -563,35 +673,32 @@ internal static class Program
 
     private static List<DisplayInfo> GetActiveDisplays()
     {
-        List<DisplayInfo> displays = new List<DisplayInfo>();
+        List<DisplayInfo> displays = new();
 
         for (uint index = 0; ; index++)
         {
-            DISPLAY_DEVICEW displayDevice = new DISPLAY_DEVICEW
+            DISPLAY_DEVICEW device = new()
             {
                 Cb = Marshal.SizeOf<DISPLAY_DEVICEW>()
             };
 
-            if (!EnumDisplayDevicesW(null, index, ref displayDevice, 0))
+            if (!EnumDisplayDevicesW(null, index, ref device, 0))
             {
                 break;
             }
 
-            if ((displayDevice.StateFlags & DisplayDeviceAttachedToDesktop) == 0 ||
-                string.IsNullOrWhiteSpace(displayDevice.DeviceName))
+            if ((device.StateFlags & DisplayDeviceAttachedToDesktop) == 0 ||
+                string.IsNullOrWhiteSpace(device.DeviceName))
             {
                 continue;
             }
 
-            string description = string.IsNullOrWhiteSpace(displayDevice.DeviceString)
-                ? "Unknown display adapter"
-                : displayDevice.DeviceString;
-
-            displays.Add(
-                new DisplayInfo(
-                    displayDevice.DeviceName,
-                    description,
-                    displayDevice.StateFlags));
+            displays.Add(new DisplayInfo(
+                device.DeviceName,
+                string.IsNullOrWhiteSpace(device.DeviceString)
+                    ? "Unknown display adapter"
+                    : device.DeviceString,
+                device.StateFlags));
         }
 
         return displays;
@@ -599,50 +706,78 @@ internal static class Program
 
     private static DisplayInfo? FindActiveDisplay(string deviceName)
     {
-        foreach (DisplayInfo display in GetActiveDisplays())
+        return GetActiveDisplays().FirstOrDefault(display =>
+            string.Equals(
+                display.DeviceName,
+                deviceName,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static List<DisplayMode> GetModes(string deviceName)
+    {
+        List<DisplayMode> modes = new();
+
+        for (uint index = 0; ; index++)
         {
-            if (string.Equals(
-                    display.DeviceName,
-                    deviceName,
-                    StringComparison.OrdinalIgnoreCase))
+            DEVMODEW mode = NewDevMode();
+
+            if (!EnumDisplaySettingsW(deviceName, index, ref mode))
             {
-                return display;
+                break;
             }
+
+            if (mode.DmPelsWidth == 0 ||
+                mode.DmPelsHeight == 0 ||
+                mode.DmDisplayFrequency == 0)
+            {
+                continue;
+            }
+
+            modes.Add(new DisplayMode(
+                (int)mode.DmPelsWidth,
+                (int)mode.DmPelsHeight,
+                (int)mode.DmDisplayFrequency));
         }
 
-        return null;
+        return modes
+            .Distinct()
+            .ToList();
     }
 
     private static bool TryGetCurrentMode(
         string deviceName,
         out DEVMODEW mode)
     {
-        mode = new DEVMODEW
-        {
-            DmSize = checked((ushort)Marshal.SizeOf<DEVMODEW>()),
-            DmDriverExtra = 0
-        };
+        mode = NewDevMode();
 
         bool success = EnumDisplaySettingsW(
             deviceName,
             EnumCurrentSettings,
             ref mode);
 
-        // This tool does not use any driver-private trailing data.
         mode.DmSize = checked((ushort)Marshal.SizeOf<DEVMODEW>());
         mode.DmDriverExtra = 0;
 
         return success;
     }
 
+    private static DEVMODEW NewDevMode()
+    {
+        return new DEVMODEW
+        {
+            DmSize = checked((ushort)Marshal.SizeOf<DEVMODEW>()),
+            DmDriverExtra = 0
+        };
+    }
+
     private static void PrintDisplay(DisplayInfo display, int number)
     {
-        bool isPrimary =
+        bool primary =
             (display.StateFlags & DisplayDevicePrimaryDevice) != 0;
 
         Console.WriteLine(
             $"[{number}] {display.DeviceName}" +
-            (isPrimary ? " (primary)" : string.Empty));
+            (primary ? " (primary)" : string.Empty));
 
         Console.WriteLine($"    {display.Description}");
 
@@ -710,17 +845,17 @@ internal static class Program
         }
 
         char[] invalidCharacters = Path.GetInvalidFileNameChars();
-        StringBuilder cleaned = new StringBuilder();
+        StringBuilder result = new();
 
         foreach (char character in name)
         {
-            cleaned.Append(
+            result.Append(
                 Array.IndexOf(invalidCharacters, character) >= 0
                     ? '_'
                     : character);
         }
 
-        name = cleaned.ToString().Trim().TrimEnd('.', ' ');
+        name = result.ToString().Trim().TrimEnd('.', ' ');
 
         return string.IsNullOrWhiteSpace(name)
             ? fallbackName
@@ -733,7 +868,7 @@ internal static class Program
                string.Equals(input?.Trim(), "yes", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string DescribeDisplayChangeResult(int result)
+    private static string DescribeResult(int result)
     {
         return result switch
         {
@@ -744,7 +879,6 @@ internal static class Program
             DispChangeNotUpdated => "DISP_CHANGE_NOTUPDATED",
             DispChangeBadFlags => "DISP_CHANGE_BADFLAGS",
             DispChangeBadParam => "DISP_CHANGE_BADPARAM",
-            DispChangeBadDualView => "DISP_CHANGE_BADDUALVIEW",
             _ => $"Unknown display error ({result})"
         };
     }
@@ -757,20 +891,14 @@ internal static class Program
         {
             detachWhenFinished = true;
         }
-        else
+        else if (Marshal.GetLastWin32Error() != ErrorAccessDenied)
         {
-            int error = Marshal.GetLastWin32Error();
-
-            // ERROR_ACCESS_DENIED means the process already has a console.
-            if (error != ErrorAccessDenied)
+            if (!AllocConsole())
             {
-                if (!AllocConsole())
-                {
-                    return ExitUnexpectedError;
-                }
-
-                detachWhenFinished = true;
+                return ExitUnexpectedError;
             }
+
+            detachWhenFinished = true;
         }
 
         try
@@ -794,28 +922,26 @@ internal static class Program
 
     private static void InitializeConsoleStreams()
     {
-        Encoding utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        Encoding encoding = new UTF8Encoding(false);
 
-        Console.InputEncoding = utf8;
-        Console.OutputEncoding = utf8;
+        Console.SetOut(new StreamWriter(
+            Console.OpenStandardOutput(),
+            encoding)
+        {
+            AutoFlush = true
+        });
 
-        Console.SetOut(
-            new StreamWriter(Console.OpenStandardOutput(), utf8)
-            {
-                AutoFlush = true
-            });
+        Console.SetError(new StreamWriter(
+            Console.OpenStandardError(),
+            encoding)
+        {
+            AutoFlush = true
+        });
 
-        Console.SetError(
-            new StreamWriter(Console.OpenStandardError(), utf8)
-            {
-                AutoFlush = true
-            });
-
-        Console.SetIn(
-            new StreamReader(
-                Console.OpenStandardInput(),
-                utf8,
-                detectEncodingFromByteOrderMarks: false));
+        Console.SetIn(new StreamReader(
+            Console.OpenStandardInput(),
+            encoding,
+            detectEncodingFromByteOrderMarks: false));
     }
 
     private static void PrintHelp()
@@ -825,30 +951,20 @@ internal static class Program
         Console.WriteLine("Wizard:");
         Console.WriteLine("  ResSwitcher9000.exe");
         Console.WriteLine();
-        Console.WriteLine("List active display devices:");
+        Console.WriteLine("List displays:");
         Console.WriteLine("  ResSwitcher9000.exe --list");
         Console.WriteLine();
         Console.WriteLine("Apply a display mode:");
         Console.WriteLine(
-            @"  ResSwitcher9000.exe --device ""\\.\DISPLAY1"" --width 2560 --height 1440 --refresh 144");
+            @"  ResSwitcher9000.exe --device ""\\.\DISPLAY1"" --width 1920 --height 1080 --refresh 60");
         Console.WriteLine();
-        Console.WriteLine("Save the selected mode in the current Windows user profile:");
+        Console.WriteLine("Save a mode in the current Windows user profile:");
         Console.WriteLine(
-            @"  ResSwitcher9000.exe --device ""\\.\DISPLAY1"" --width 2560 --height 1440 --refresh 144 --persist");
+            @"  ResSwitcher9000.exe --device ""\\.\DISPLAY1"" --width 1920 --height 1080 --refresh 60 --persist");
         Console.WriteLine();
-        Console.WriteLine("Show result output:");
+        Console.WriteLine("Show success or error output:");
         Console.WriteLine(
-            @"  ResSwitcher9000.exe --device ""\\.\DISPLAY1"" --width 2560 --height 1440 --refresh 144 --verbose");
-        Console.WriteLine();
-        Console.WriteLine("Arguments:");
-        Console.WriteLine("  -d, --device     Display device name from --list");
-        Console.WriteLine("  -w, --width      Width in physical pixels");
-        Console.WriteLine("  -h, --height     Height in physical pixels");
-        Console.WriteLine("  -r, --refresh    Refresh rate in whole Hz");
-        Console.WriteLine("  --persist        Save the selected mode in the Windows user profile");
-        Console.WriteLine("  --verbose        Show success or error output");
-        Console.WriteLine("  --list           List active display devices");
-        Console.WriteLine("  --help, -?       Show this help");
+            @"  ResSwitcher9000.exe --device ""\\.\DISPLAY1"" --width 1920 --height 1080 --refresh 60 --verbose");
     }
 
     private static void WriteSuccess(string message)
@@ -912,6 +1028,11 @@ internal static class Program
         public string Description { get; }
         public uint StateFlags { get; }
     }
+
+    private readonly record struct DisplayMode(
+        int Width,
+        int Height,
+        int RefreshRate);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct DEVMODEW
@@ -1019,6 +1140,6 @@ internal static class Program
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumDisplaySettingsW(
         string deviceName,
-        uint modeNumber,
+        uint modeIndex,
         ref DEVMODEW deviceMode);
 }
