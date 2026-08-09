@@ -1,60 +1,44 @@
-# ResSwitcher9000
+# ResSwitcher9000 — Windows Resolution & Refresh-Rate Shortcuts
 
-ResSwitcher9000 is a free, open-source Windows utility that creates desktop shortcuts for changing a selected monitor's resolution and refresh rate.
+A free, open-source Windows utility for creating desktop shortcuts that switch a selected monitor's resolution and refresh rate.
 
-It supports Windows 10 and Windows 11 on x64 PCs. It lists Windows-reported display modes, tests a selected mode before creating a shortcut, and does not choose a default resolution or refresh rate.
+Each shortcut uses a **15-second safe confirmation**: press `1` to keep the new display mode, press `0` to revert immediately, or wait for automatic rollback.
 
-## Platform
+- Windows 10 and Windows 11
+- x64 only
+- No installer or always-running background service
+- Self-contained executable
 
-- Windows 10 and Windows 11, x64.
-- The release build is `win-x64`.
-- No installer, background service, or configuration file.
-- The release executable is self-contained.
+## Download
 
-## What It Does
+Download `ResSwitcher9000.exe` from the repository's **Releases** page.
 
-ResSwitcher9000:
+Run the executable to open the shortcut-creation wizard.
 
-1. Finds active Windows display devices.
-2. Lets you select a display.
-3. Shows resolutions and refresh rates reported by Windows.
-4. Tests the selected mode before creating a shortcut.
-5. Creates a desktop shortcut for that mode.
+## Create a Display Shortcut
 
-It does not choose a default resolution or refresh rate.
+1. Open `ResSwitcher9000.exe`.
+2. Choose an active display.
+3. Choose a resolution.
+4. Choose a refresh rate.
+5. Enter a shortcut name.
+6. Double-click the new shortcut on your desktop.
 
-## Wizard
+Before creating a shortcut, ResSwitcher9000 asks Windows to test whether the selected display mode is supported.
 
-Double-click:
+## Safe Confirmation
 
-```text
-ResSwitcher9000.exe
-```
+When you open a shortcut, ResSwitcher9000 applies the selected mode and starts a 15-second countdown.
 
-The wizard will:
+- Press `1` to keep the new mode.
+- Press `0` to revert immediately.
+- Do nothing to automatically restore the previous mode.
 
-1. List active displays.
-2. Let you select a display.
-3. List Windows-reported resolutions.
-4. List refresh rates for the selected resolution.
-5. Create a desktop shortcut.
-6. Let you create another shortcut or exit.
-
-Choose `0` in the resolution list to manually enter width, height, and refresh rate.
-
-Choose `0` in the refresh-rate list to manually enter a refresh rate for the selected resolution.
-
-Example only:
-
-```text
-1920 1080 60
-```
-
-Shortcuts created by the wizard apply the mode without requesting permanent profile persistence.
+This helps prevent getting stuck with a black screen or unsupported display mode.
 
 ## Command Line
 
-PowerShell requires `.\` before an executable in the current folder.
+PowerShell requires `.\` before an executable in the current directory.
 
 List active displays:
 
@@ -68,13 +52,19 @@ Apply a display mode:
 .\ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 1920 --height 1080 --refresh 60
 ```
 
-Apply a mode and ask Windows to save it in the current user display profile:
+Apply a mode and save it to the current Windows user display profile:
 
 ```powershell
 .\ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 1920 --height 1080 --refresh 60 --persist
 ```
 
-Show success or error output:
+Apply a mode with the safe 15-second confirmation:
+
+```powershell
+.\ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 1920 --height 1080 --refresh 60 --confirm
+```
+
+Show detailed output:
 
 ```powershell
 .\ResSwitcher9000.exe --device "\\.\DISPLAY1" --width 1920 --height 1080 --refresh 60 --verbose
@@ -85,12 +75,10 @@ Show help:
 ```powershell
 .\ResSwitcher9000.exe --help
 ```
-## Shortcut Confirmation
 
-Shortcuts created by the wizard use safe confirmation mode.
+## Notes
 
-After opening a shortcut:
-
-- Press `1` within 15 seconds to keep the selected mode.
-- Press `0` to revert immediately.
-- If no confirmation is given, ResSwitcher9000 restores the previous mode automatically.
+- ResSwitcher9000 lists display modes reported by Windows.
+- A manually entered resolution or refresh rate is tested before it is applied.
+- The tool does not automatically choose a “best” resolution or refresh rate.
+- Shortcuts created by the wizard use safe confirmation mode and do not permanently save the display mode.
